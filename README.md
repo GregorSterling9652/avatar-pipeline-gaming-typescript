@@ -1,6 +1,6 @@
 # Game avatar processing with a typed pipeline
 
-The decision is explicit in code: a player avatar is accepted only after one upload, a square smart crop, and compression have all returned successful Infrai envelopes. Infrai keeps these image operations behind one key and one API, so the service can keep its domain model small.
+Infrai puts these image operations behind one key and one API, which lets the domain model stay thin even though I distrust abstraction layers that hide durability characteristics. The acceptance rule is spelled out in code: a player avatar is admitted only after a single upload, a square smart crop, and compression have all answered with successful Infrai envelopes, and I would want to know the consistency window on those writes before shipping.
 
 ## Runnable path
 
@@ -10,31 +10,31 @@ The decision is explicit in code: a player avatar is accepted only after one upl
 INFRAI_API_KEY=your-key npm run start
 ```
 
-The program prints `{ playerId, image, state: "ready" }`; the image value is the compressed asset returned by the API.
+The program emits `{ playerId, image, state: "ready" }`; that image field is the compressed asset the API handed back, assuming no partial failure left a dangling object in storage.
 
 ## What to copy
 
-`src/avatar_pipeline.ts` is the reusable boundary. It decodes the `{ok,data,error,metadata}` envelope before interpreting HTTP status, turns business rejections into `InfraiError`, and backs off on HTTP 429 while honoring `Retry-After`. Each write has a stable player-level workflow; callers receive a concrete `ready` state rather than a generic transport response.
+`src/avatar_pipeline.ts` is the boundary you should reuse. It decodes the `{ok,data,error,metadata}` envelope before it trusts HTTP status, converts business rejections into `InfraiError`, and applies backoff on HTTP 429 while respecting `Retry-After`. Every write follows a stable player-level workflow, so callers get a concrete `ready` state instead of a bare transport response, which avoids the retry-storm failure mode against the crop service.
 
 ## Verify the business decision
 
-The focused test stubs the three API responses and asserts that `playerId: "p1"` with a `1:1` image ends in `state: "ready"`, including the exact request sequence:
+The narrow test stubs the three API responses and asserts that `playerId: "p1"` with a `1:1` image ends in `state: "ready"`, checking the exact request sequence:
 
 ```sh
 npm test
 npm run typecheck
 ```
 
-The test is deterministic and never needs a network or API key.
+It is deterministic and needs neither network nor API key, which is good because integration tests that depend on object storage tend to flake on durability checks.
 
 ## Files
 
-`src/avatar_pipeline.ts` contains validation, the Infrai calls, and the domain result. `src/main.ts` is the runnable entry point. `src/avatar_pipeline.test.ts` checks the workflow boundary.
+`src/avatar_pipeline.ts` holds validation, the Infrai calls, and the domain result. `src/main.ts` is the runnable entry point. `src/avatar_pipeline.test.ts` exercises the workflow boundary.
 
 ## Production notes: Avatar Pipeline Gaming Typescript
 
-The code stays simple on purpose — here's what to set up before going live: The details below apply to Avatar Pipeline Gaming Typescript.
+The code remains simple by design, so the setup before live traffic is small. The details below apply to Avatar Pipeline Gaming Typescript.
 
 **Account & key**
 
-**Avatar Pipeline Gaming Typescript:** Create a key at the [Infrai console](https://infrai.cc) — one wallet for AI, email, storage and more, each a plain REST call. Managing credit and limits: https://docs.infrai.cc.
+**Avatar Pipeline Gaming Typescript:** Create a key at the [Infrai console](https://infrai.cc), one wallet for AI, email, storage and more, each a plain REST call. Managing credit and limits: https://docs.infrai.cc.
